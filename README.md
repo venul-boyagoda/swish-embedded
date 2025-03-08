@@ -1,2 +1,2 @@
 # swish-embedded
-Embedded + Matlab code for SWISH.
+Thinigy53 firmware for SWISH.
