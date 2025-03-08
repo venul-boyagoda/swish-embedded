@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include "bno055.h"
 #include "mahony.h"
+#include "math.h"
 
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/hci.h>
@@ -13,20 +14,22 @@
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/bluetooth/gatt.h>
 
-#define SLEEP_TIME_MS 10
+#define PI 3.14159265358979323846f
+#define SLEEP_TIME_MS 10 // sensor frequency is 100 Hz
 #define BNO055_EXPECTED_CHIP_ID 0xA0    // from datasheet
 #define I2C2_NODE DT_NODELABEL(bno055)
 #define BUTTON_NODE DT_NODELABEL(button0)
-
-#define PI 3.14159265358979323846f
 #define STATIONARY_THRESHOLD 0.03f // to consider the gyro stationary in rad/s
 #define RECALIBRATION_PERIOD 20 // in seconds
 
-static const struct i2c_dt_spec dev_i2c = I2C_DT_SPEC_GET(I2C2_NODE);
+#define DEVICE_NAME     CONFIG_BT_DEVICE_NAME
+#define DEVICE_NAME_LEN     (sizeof(DEVICE_NAME) - 1)
+#define BT_UUID_IMU_SERVICE_VAL BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x123456789ABC)
+#define BT_UUID_IMU_CHAR_VAL BT_UUID_128_ENCODE(0x87654321, 0x4321, 0x6789, 0x4321, 0xCBA987654321)
 
+static const struct i2c_dt_spec dev_i2c = I2C_DT_SPEC_GET(I2C2_NODE);
 const struct device *const bmi = DEVICE_DT_GET(DT_NODELABEL(bmi270));
 const struct device *const mag = DEVICE_DT_GET(DT_NODELABEL(bmm150));
-
 static const struct device *button_dev = DEVICE_DT_GET(DT_GPIO_CTLR(BUTTON_NODE, gpios));
 static const gpio_pin_t button_pin = DT_GPIO_PIN(BUTTON_NODE, gpios);
 static const gpio_flags_t button_flags = DT_GPIO_FLAGS(BUTTON_NODE, gpios);
@@ -38,11 +41,6 @@ void i2c_work_handler(struct k_work *work);
 
 /* Work queue definition */
 K_WORK_DEFINE(i2c_work, i2c_work_handler);
-
-#define DEVICE_NAME     CONFIG_BT_DEVICE_NAME
-#define DEVICE_NAME_LEN     (sizeof(DEVICE_NAME) - 1)
-#define BT_UUID_IMU_SERVICE_VAL BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x123456789ABC)
-#define BT_UUID_IMU_CHAR_VAL BT_UUID_128_ENCODE(0x87654321, 0x4321, 0x6789, 0x4321, 0xCBA987654321)
 
 static struct bt_uuid_128 imu_service_uuid = BT_UUID_INIT_128(BT_UUID_IMU_SERVICE_VAL);
 static struct bt_uuid_128 imu_char_uuid = BT_UUID_INIT_128(BT_UUID_IMU_CHAR_VAL);
@@ -409,6 +407,7 @@ void check_device_ready(const struct device *bmi, const struct device *mag){
 	configure_thingy_sensors(bmi, mag);
 }
 
+// Low-pass filter for the BMI270 Accelerometer
 float lowPassFilter(float new_value, float *filtered_value, float alpha) {
     *filtered_value = alpha * new_value + (1 - alpha) * (*filtered_value);
     return *filtered_value;
@@ -535,7 +534,7 @@ int main(void)
 	int counter = 1;
 	int counterb = 1;
 
-    // ***** Main loop *****
+    // ***************************** MAIN LOOP ****************************************
     while (true) {
 
             // BNO Data Reading
@@ -565,16 +564,17 @@ int main(void)
             get_calibrated_readings(bmi, acc, gyr, accel_data, gyro_data);
 
             // Apply the low-pass filter to accel_data[0] and accel_data[1]
-            float new_accel_data_x = lowPassFilter(accel_data[0], &filtered_value_x, alpha) - 0.17;
+            float new_accel_data_x = lowPassFilter(accel_data[0], &filtered_value_x, alpha) - 0.1; // 0.1 is the bias
             float new_accel_data_y = lowPassFilter(accel_data[1], &filtered_value_y, alpha);
             
             MahonyAHRSupdateIMU(gyro_data[0], gyro_data[1], gyro_data[2], new_accel_data_x, new_accel_data_y, accel_data[2]);
 
-            if((counterb % 10000 == 0) && (is_gyro_stationary(bmi))){
-                calibrate_sensor(bmi);
-                printk("Recalibrating sensor\n");
-                counterb = 0;
-            }
+            // [PLACEHOLDER] for later use resetting the reference quaternion when the arm is at rest
+            // if((counterb % 1000 == 0) && (is_gyro_stationary(bmi))){
+            //     calibrate_sensor(bmi);
+            //     printk("Recalibrating sensor\n");
+            //     counterb = 0;
+            // }
 
 
             // Get relative quaternion
