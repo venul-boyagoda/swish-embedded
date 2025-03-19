@@ -4,8 +4,25 @@
 
 #define BNO055_EXPECTED_CHIP_ID 0xA0    // from datasheet
 #define I2C2_NODE DT_NODELABEL(bno055)
+#define PI 3.14159265358979323846
 
 static const struct i2c_dt_spec dev_i2c = I2C_DT_SPEC_GET(I2C2_NODE);
+
+/* Adding Bosch i2c device struct and creating wrappers to be able to use bosch driver functions*/
+static struct bno055_t bno055_device;
+
+static s8 zephyr_bno055_bus_write(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 len) {
+    return i2c_burst_write(dev_i2c.bus, dev_addr, reg_addr, reg_data, len) == 0 ? BNO055_SUCCESS : BNO055_ERROR;
+}
+
+static s8 zephyr_bno055_bus_read(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 len) {
+    return i2c_burst_read(dev_i2c.bus, dev_addr, reg_addr, reg_data, len) == 0 ? BNO055_SUCCESS : BNO055_ERROR;
+}
+
+static void zephyr_bno055_delay(u32 msec) {
+    k_msleep(msec);
+}
+
 
 // Quaternion variables
 float q0, q1, q2, q3;
@@ -106,6 +123,14 @@ bool init_bno055(void)
 {
     printk("Starting BNO055 I2C debug\n");
 
+    /* Bosch wrapper code */
+    bno055_device.dev_addr = dev_i2c.addr;
+    bno055_device.bus_write = zephyr_bno055_bus_write;
+    bno055_device.bus_read = zephyr_bno055_bus_read;
+    bno055_device.delay_msec = zephyr_bno055_delay;
+    bno055_init(&bno055_device);  // Now p_bno055 is ready
+
+
     i2c_scan(&dev_i2c);
 
     int ret = read_chip_id();
@@ -125,31 +150,34 @@ bool init_bno055(void)
 }
 
 bool fetch_gyro_values_rps(float *gyro_values) {
-    struct bno055_gyro_float_t gyro_data;
-    BNO055_RETURN_FUNCTION_TYPE result = bno055_convert_float_gyro_xyz_rps(&gyro_data);
+    struct bno055_gyro_t gyro_raw;
+    BNO055_RETURN_FUNCTION_TYPE result = bno055_read_gyro_xyz(&gyro_raw);
     if (result != BNO055_SUCCESS) {
-        return false; // Indicate failure
+        return false;
     }
-    gyro_values[0] = gyro_data.x;
-    gyro_values[1] = gyro_data.y;
-    gyro_values[2] = gyro_data.z;
-    return true; // Indicate success
+
+    const float dps_scale = 1.0f / 16.0f;
+    const float deg_to_rad = (PI / 180.0f);
+
+    gyro_values[0] = ((float)gyro_raw.x * dps_scale) * deg_to_rad;
+    gyro_values[1] = ((float)gyro_raw.y * dps_scale) * deg_to_rad;
+    gyro_values[2] = ((float)gyro_raw.z * dps_scale) * deg_to_rad;
+
+    return true;
 }
 
 bool fetch_linear_accel(float *linear_accel_values) {
-    struct bno055_linear_accel_t linear_accel_raw;
-    BNO055_RETURN_FUNCTION_TYPE result;
+    struct bno055_linear_accel_t accel_raw;
+    u8 buffer[6];
+    BNO055_RETURN_FUNCTION_TYPE result = bno055_read_linear_accel_xyz(&accel_raw);
 
-    // Fetch linear acceleration data (X, Y, Z)
-    result = bno055_read_linear_accel_xyz(&linear_accel_raw);
     if (result != BNO055_SUCCESS) {
-        return false; // Return false if reading fails
+        return false;
     }
 
-    // Convert raw linear acceleration data to m/s²
-    linear_accel_values[0] = (float)linear_accel_raw.x / BNO055_LINEAR_ACCEL_DIV_MSQ;
-    linear_accel_values[1] = (float)linear_accel_raw.y / BNO055_LINEAR_ACCEL_DIV_MSQ;
-    linear_accel_values[2] = (float)linear_accel_raw.z / BNO055_LINEAR_ACCEL_DIV_MSQ;
+    linear_accel_values[0] = (float)accel_raw.x / BNO055_LINEAR_ACCEL_DIV_MSQ;
+    linear_accel_values[1] = (float)accel_raw.y / BNO055_LINEAR_ACCEL_DIV_MSQ;
+    linear_accel_values[2] = (float)accel_raw.z / BNO055_LINEAR_ACCEL_DIV_MSQ;
 
-    return true; // Return true if successful
+    return true;
 }
