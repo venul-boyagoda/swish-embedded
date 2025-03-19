@@ -25,6 +25,12 @@ int set_operation_mode(uint8_t operation_mode);
 // Print I2C error codes
 void print_i2c_error(int error);
 
+// fetch gyro data
+bool fetch_gyro_values_rps(float *gyro_values);
+
+// fetch linear accel
+bool fetch_linear_accel(float *linear_accel_values);
+
 // External quaternion data
 extern float q0, q1, q2, q3;
 extern float q0_ref_bno, q1_ref_bno, q2_ref_bno, q3_ref_bno;

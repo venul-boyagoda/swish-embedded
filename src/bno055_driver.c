@@ -123,3 +123,33 @@ bool init_bno055(void)
     printk("BNO055 initialization complete\n");
     return true;
 }
+
+bool fetch_gyro_values_rps(float *gyro_values) {
+    struct bno055_gyro_float_t gyro_data;
+    BNO055_RETURN_FUNCTION_TYPE result = bno055_convert_float_gyro_xyz_rps(&gyro_data);
+    if (result != BNO055_SUCCESS) {
+        return false; // Indicate failure
+    }
+    gyro_values[0] = gyro_data.x;
+    gyro_values[1] = gyro_data.y;
+    gyro_values[2] = gyro_data.z;
+    return true; // Indicate success
+}
+
+bool fetch_linear_accel(float *linear_accel_values) {
+    struct bno055_linear_accel_t linear_accel_raw;
+    BNO055_RETURN_FUNCTION_TYPE result;
+
+    // Fetch linear acceleration data (X, Y, Z)
+    result = bno055_read_linear_accel_xyz(&linear_accel_raw);
+    if (result != BNO055_SUCCESS) {
+        return false; // Return false if reading fails
+    }
+
+    // Convert raw linear acceleration data to m/s²
+    linear_accel_values[0] = (float)linear_accel_raw.x / BNO055_LINEAR_ACCEL_DIV_MSQ;
+    linear_accel_values[1] = (float)linear_accel_raw.y / BNO055_LINEAR_ACCEL_DIV_MSQ;
+    linear_accel_values[2] = (float)linear_accel_raw.z / BNO055_LINEAR_ACCEL_DIV_MSQ;
+
+    return true; // Return true if successful
+}

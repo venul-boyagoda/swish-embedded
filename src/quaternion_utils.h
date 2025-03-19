@@ -12,19 +12,8 @@
  #include "mahony.h"
  #include <math.h>
  
- // Global quaternion variables
-//  extern float q0, q1, q2, q3; // BNO055 quaternion
-// //  extern float qq0, qq1, qq2, qq3; // Onboard IMU quaternion (from Mahony filter)
- 
-//  // Reference quaternions for calculating relative orientation
-//  extern float q0_ref_bno, q1_ref_bno, q2_ref_bno, q3_ref_bno;
-//  extern float q0_rel_bno, q1_rel_bno, q2_rel_bno, q3_rel_bno;
- 
-//  extern float q0_ref_onboard, q1_ref_onboard, q2_ref_onboard, q3_ref_onboard;
-//  extern float q0_rel_onboard, q1_rel_onboard, q2_rel_onboard, q3_rel_onboard;
- 
- // Rotation matrix 
- extern float rot_mat[3][3];
+ extern uint8_t imu_data_combined[108];
+
  
  /**
   * @brief Normalizes a quaternion to unit length

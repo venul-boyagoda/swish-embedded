@@ -1,5 +1,4 @@
 #include "bluetooth.h"
-#include "quaternion_utils.h"
 #include <stdio.h>
 #include <zephyr/sys/byteorder.h>
 
@@ -8,13 +7,10 @@
 #define BT_UUID_IMU_SERVICE_VAL BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x123456789ABC)
 #define BT_UUID_IMU_CHAR_VAL BT_UUID_128_ENCODE(0x87654321, 0x4321, 0x6789, 0x4321, 0xCBA987654321)
 
-extern float q0_rel_bno, q1_rel_bno, q2_rel_bno, q3_rel_bno;
-extern float rot_mat[3][3];
-
 static struct bt_uuid_128 imu_service_uuid = BT_UUID_INIT_128(BT_UUID_IMU_SERVICE_VAL);
 static struct bt_uuid_128 imu_char_uuid = BT_UUID_INIT_128(BT_UUID_IMU_CHAR_VAL);
 
-uint8_t imu_data[36];  // Buffer to hold 3×3 rotation matrix (9 floats * 4 bytes)
+// uint8_t imu_data_combined[108];  // Buffer to hold 3×3 rotation matrix (9 floats * 4 bytes)
 static struct bt_conn *default_conn = NULL;
 
 /* Bluetooth Advertisement Data */
@@ -40,7 +36,7 @@ static struct bt_gatt_attr imu_service_attrs[] = {
     BT_GATT_CHARACTERISTIC(&imu_char_uuid.uuid,
                          BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
                          BT_GATT_PERM_READ,
-                         read_callback, NULL, imu_data),
+                         read_callback, NULL, imu_data_combined),
     BT_GATT_CCC(NULL, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
 };
 
@@ -101,7 +97,7 @@ ssize_t read_callback(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 /* Notify IMU Data */
 extern void notify_imu_data(void) {
     if (default_conn) {
-        bt_gatt_notify(default_conn, &imu_service_attrs[1], imu_data, sizeof(imu_data));
+        bt_gatt_notify(default_conn, &imu_service_attrs[1], imu_data_combined, sizeof(imu_data_combined));
     }
 }
 

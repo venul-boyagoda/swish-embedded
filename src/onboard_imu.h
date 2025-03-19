@@ -36,6 +36,8 @@ bool is_gyro_stationary(const struct device *dev);
 // Update onboard IMU data
 void update_onboard_imu_data(void);
 
+void get_gyro_data(float *gyro_out);
+
 // External quaternion data
 // extern volatile float qq0, qq1, qq2, qq3;
 extern volatile float q0_ref_onboard, q1_ref_onboard, q2_ref_onboard, q3_ref_onboard;

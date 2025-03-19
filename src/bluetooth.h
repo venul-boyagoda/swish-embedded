@@ -9,7 +9,7 @@
 #include <zephyr/bluetooth/gatt.h>
 #include <stdbool.h>
 
-extern uint8_t imu_data[36];
+#include "quaternion_utils.h"
 
 // Initialize Bluetooth functionality
 bool init_bluetooth(void);

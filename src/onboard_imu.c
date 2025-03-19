@@ -200,3 +200,16 @@ bool init_onboard_imu(void) {
     printk("Onboard IMU initialization complete\n");
     return true;
 }
+
+void get_gyro_data(float *gyro_out) {
+    struct sensor_value gyr[3];
+
+    // Fetch and get gyroscope data
+    sensor_sample_fetch(bmi);
+    sensor_channel_get(bmi, SENSOR_CHAN_GYRO_XYZ, gyr);
+
+    // Convert sensor values to float and store in the provided array
+    for (int i = 0; i < 3; i++) {
+        gyro_out[i] = sensor_value_to_float(&gyr[i]);
+    }
+}

@@ -9,20 +9,15 @@
  #include "bluetooth.h"
  
  // External declarations for BLE functionality
- extern uint8_t imu_data[36];
- extern void notify_imu_data(void);
+ uint8_t imu_data_combined[108];
+ // extern void notify_imu_data(void);
+
  
- // Define quaternion variables
-//  float q0, q1, q2, q3;
-// //  float qq0, qq1, qq2, qq3;
- 
-//  float q0_ref_bno, q1_ref_bno, q2_ref_bno, q3_ref_bno;
-//  float q0_rel_bno, q1_rel_bno, q2_rel_bno, q3_rel_bno;
- 
-//  float q0_ref_onboard, q1_ref_onboard, q2_ref_onboard, q3_ref_onboard;
-//  float q0_rel_onboard, q1_rel_onboard, q2_rel_onboard, q3_rel_onboard;
- 
- float rot_mat[3][3];
+ float rot_mat_BNO[3][3];
+ float rot_mat_BMI[3][3];
+ float bmi_gyro[3];
+ float bno_gyro[3];
+ float bno_accel[3];
  
  void normalize_quat(float *w, float *x, float *y, float *z) {
      float norm = sqrt((*w) * (*w) + (*x) * (*x) + (*y) * (*y) + (*z) * (*z));
@@ -94,13 +89,31 @@
  
  void update_rotation_matrix_and_notify(void) {
      // Generate rotation matrix from BNO055 relative quaternion
-     quaternion_to_rot_mat(q0_rel_bno, q1_rel_bno, q2_rel_bno, q3_rel_bno, rot_mat);
+     quaternion_to_rot_mat(q0_rel_bno, q1_rel_bno, q2_rel_bno, q3_rel_bno, rot_mat_BNO);
+
+     // Generate rotation matrix from BMI270 relative quaternion
+     quaternion_to_rot_mat(q0_rel_onboard, q1_rel_onboard, q2_rel_onboard, q3_rel_onboard, rot_mat_BMI);
      
-     // Convert rotation matrix to little-endian byte array for BLE
+     // Convert rotation matrix to little-endian byte array for BLE for BNO055 & BMI270
      for (int i = 0; i < 9; i++) {
-         sys_put_le32(*(uint32_t *)&rot_mat[i / 3][i % 3], &imu_data[i * 4]);
+        sys_put_le32(*(uint32_t *)&rot_mat_BNO[i / 3][i % 3], &imu_data_combined[i * 4]);
+        sys_put_le32(*(uint32_t *)&rot_mat_BMI[i / 3][i % 3], &imu_data_combined[36 + i * 4]);
      }
+
+     // extract and store Gyro data from BMI270 and BNO055
+     get_gyro_data(bmi_gyro);
+     fetch_gyro_values_rps(bno_gyro);
      
+     // extract and store Linear Acceleration from BNO055
+     fetch_linear_accel(bno_accel);
+
+     // combine all extracted data into a single array and convert to uint32_t
+     for (int i = 0; i < 3; i++) {
+        sys_put_le32(*(uint32_t *)&bno_gyro[i], &imu_data_combined[72 + i * 4]);
+        sys_put_le32(*(uint32_t *)&bno_accel[i], &imu_data_combined[84 + i * 4]);
+        sys_put_le32(*(uint32_t *)&bmi_gyro[i], &imu_data_combined[96 + i * 4]);
+    }
+
      // Notify BLE clients
      notify_imu_data();
  }
