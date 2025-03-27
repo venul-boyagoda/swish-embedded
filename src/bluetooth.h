@@ -10,6 +10,7 @@
 #include <stdbool.h>
 
 #include "quaternion_utils.h"
+#include  <zephyr/bluetooth/hci.h>
 
 // Initialize Bluetooth functionality
 bool init_bluetooth(void);
@@ -26,4 +27,16 @@ void disconnected(struct bt_conn *conn, uint8_t reason);
 ssize_t read_callback(struct bt_conn *conn, const struct bt_gatt_attr *attr,
                      void *buf, uint16_t len, uint16_t offset);
 
+                     static ssize_t time_sync_write_cb(struct bt_conn *conn,
+                        const struct bt_gatt_attr *attr,
+                        const void *buf,
+                        uint16_t len,
+                        uint16_t offset,
+                        uint8_t flags);
+static ssize_t time_sync_write_cb(struct bt_conn *conn,
+                                  const struct bt_gatt_attr *attr,
+                                  const void *buf,
+                                  uint16_t len,
+                                  uint16_t time_offset_estimate,
+                                  uint8_t flags);
 #endif // BLUETOOTH_H

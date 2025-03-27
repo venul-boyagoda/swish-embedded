@@ -1,14 +1,23 @@
 #include "bluetooth.h"
 #include <stdio.h>
+#include <stdint.h>              // For int64_t, ADDED
 #include <zephyr/sys/byteorder.h>
 
 #define DEVICE_NAME     CONFIG_BT_DEVICE_NAME
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
+
+/* Define UUIDs: used to define services, characteristics, and/or descriptors in context of BLE
+   UUIDs are used for the phone and BLE client to know what kind of data is being sent
+   Although there are some standard features (UUIDs), you can define your own UUIDs for custom services
+*/
+
 #define BT_UUID_IMU_SERVICE_VAL BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x123456789ABC)
 #define BT_UUID_IMU_CHAR_VAL BT_UUID_128_ENCODE(0x87654321, 0x4321, 0x6789, 0x4321, 0xCBA987654321)
+#define BT_UUID_TIME_SYNC_CHAR_VAL BT_UUID_128_ENCODE(0x44444444, 0x4444, 0x4444, 0x4444, 0x444444444444)
 
 static struct bt_uuid_128 imu_service_uuid = BT_UUID_INIT_128(BT_UUID_IMU_SERVICE_VAL);
 static struct bt_uuid_128 imu_char_uuid = BT_UUID_INIT_128(BT_UUID_IMU_CHAR_VAL);
+static struct bt_uuid_128 time_sync_char_uuid = BT_UUID_INIT_128(BT_UUID_TIME_SYNC_CHAR_VAL);
 
 // uint8_t imu_data_combined[108];  // Buffer to hold 3×3 rotation matrix (9 floats * 4 bytes)
 static struct bt_conn *default_conn = NULL;
@@ -37,6 +46,10 @@ static struct bt_gatt_attr imu_service_attrs[] = {
                          BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
                          BT_GATT_PERM_READ,
                          read_callback, NULL, imu_data_combined),
+    BT_GATT_CHARACTERISTIC(&time_sync_char_uuid.uuid,
+                       BT_GATT_CHRC_WRITE,
+                       BT_GATT_PERM_WRITE,
+                       NULL, time_sync_write_cb, NULL),
     BT_GATT_CCC(NULL, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
 };
 
@@ -75,7 +88,23 @@ void connected(struct bt_conn *conn, uint8_t err) {
         printk("Connection failed, err 0x%02x\n", err);
         return;
     }
+    
     printk("Connected\n");
+    
+    // // Request 2M PHY after connection
+    // struct bt_conn_le_phy_param phy_pref = {
+    //     .options = 0, // no coded PHY options needed
+    //     .pref_tx_phy = BT_GAP_LE_PHY_2M,
+    //     .pref_rx_phy = BT_GAP_LE_PHY_2M,
+    // };
+
+    // int ret = bt_conn_le_phy_update(conn, &phy_pref);
+    // if (ret) {
+    //     printk("PHY update failed: %d\n", ret);
+    // } else {
+    //     printk("Requested 2M PHY\n");
+    // }
+    
     default_conn = bt_conn_ref(conn);
 }
 
@@ -110,3 +139,44 @@ extern void notify_imu_data(void) {
 //     }
 //     notify_imu_data();
 // }
+
+/*
+    * Time Sync Service that aligns IMU data with phone time through a reasonable estimate of the offset
+    */
+static ssize_t time_sync_write_cb(struct bt_conn *conn,
+    const struct bt_gatt_attr *attr,
+    const void *buf,
+    uint16_t len,
+    uint16_t time_offset_estimate,
+    uint8_t flags) {
+    if (len < sizeof(uint64_t) + sizeof(uint64_t)) {
+        printk("Invalid time sync payload length\n");
+        return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
+    }
+
+    const uint8_t *data = buf;
+
+    uint64_t phone_time;
+    uint64_t device_echo_time;
+
+    // Copy 8 bytes from buf[0:8] into phone_time
+    memcpy(&phone_time, &data[0], sizeof(uint64_t));
+    
+    // Copy 8 bytes from buf[8:16] into device_echo_time
+    memcpy(&device_echo_time, &data[8], sizeof(uint64_t));
+
+    uint64_t device_recv_time = k_uptime_get();  // get current uptime in ms
+
+    time_offset_estimate = (int64_t)phone_time - ((int64_t)device_echo_time + (int64_t)device_recv_time) / 2;
+
+    printk("  Time Sync:\n");
+    printk("  Phone Time     : %llu\n", phone_time);
+    printk("  Device Echo    : %llu\n", device_echo_time);
+    printk("  Device Recv    : %llu\n", device_recv_time);
+    printk("  Offset Estimate: %lld ms\n", (long long)time_offset_estimate);
+
+    // Store offset globally if needed
+    // time_offset_ms = offset;
+
+    return len;
+}
