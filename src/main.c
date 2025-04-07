@@ -48,7 +48,8 @@ int main(void)
         calculate_relative_quaternions();
         
         // Convert quaternion to rotation matrix and send over BLE
-        update_rotation_matrix_and_notify();
+        // update_rotation_matrix_and_notify();
+        send_scaled_imu_data();
         
         // Print data every 1 sec (100 cycles at 10ms intervals)
         if (counter % 100 == 0) {

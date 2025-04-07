@@ -12,7 +12,7 @@
  #include "mahony.h"
  #include <math.h>
  
- extern uint8_t imu_data_combined[108];
+ extern uint8_t imu_data_combined[34];
 
  
  /**
@@ -49,5 +49,7 @@
   * Used when button is pressed
   */
  void reset_quaternion_reference(void);
+
+ void send_scaled_imu_data(void);
  
  #endif /* QUATERNION_UTILS_H */

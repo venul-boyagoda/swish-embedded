@@ -9,7 +9,7 @@
  #include "bluetooth.h"
  
  // External declarations for BLE functionality
- uint8_t imu_data_combined[108];
+ uint8_t imu_data_combined[34];
  // extern void notify_imu_data(void);
 
  
@@ -117,6 +117,46 @@
      // Notify BLE clients
      notify_imu_data();
  }
+
+ void send_scaled_imu_data() {
+    const float scale = 10000.0f;
+
+    // Scale quaternions
+    int16_t bno_q[4] = {
+        (int16_t)(q0_rel_bno * scale),
+        (int16_t)(q1_rel_bno * scale),
+        (int16_t)(q2_rel_bno * scale),
+        (int16_t)(q3_rel_bno * scale)
+    };
+    int16_t bmi_q[4] = {
+        (int16_t)(q0_rel_onboard * scale),
+        (int16_t)(q1_rel_onboard * scale),
+        (int16_t)(q2_rel_onboard * scale),
+        (int16_t)(q3_rel_onboard * scale)
+    };
+
+    // Scale gyro and accel values
+    get_gyro_data(bmi_gyro);               // fills bmi_gyro[3]
+    fetch_gyro_values_rps(bno_gyro);      // fills bno_gyro[3]
+    fetch_linear_accel(bno_accel);        // fills bno_accel[3]
+
+    int16_t bno_gyro_scaled[3], bmi_gyro_scaled[3], bno_accel_scaled[3];
+    for (int i = 0; i < 3; i++) {
+        bno_gyro_scaled[i]  = (int16_t)(bno_gyro[i]  * scale);
+        bmi_gyro_scaled[i]  = (int16_t)(bmi_gyro[i]  * scale);
+        bno_accel_scaled[i] = (int16_t)(bno_accel[i] * scale);
+    }
+
+    // Pack into imu_data_combined (little-endian)
+    int offset = 0;
+    for (int i = 0; i < 4; i++) sys_put_le16(bno_q[i],       &imu_data_combined[offset += 0]);
+    for (int i = 0; i < 4; i++) sys_put_le16(bmi_q[i],       &imu_data_combined[offset += 2]);
+    for (int i = 0; i < 3; i++) sys_put_le16(bno_gyro_scaled[i],  &imu_data_combined[offset += 2]);
+    for (int i = 0; i < 3; i++) sys_put_le16(bmi_gyro_scaled[i],  &imu_data_combined[offset += 2]);
+    for (int i = 0; i < 3; i++) sys_put_le16(bno_accel_scaled[i], &imu_data_combined[offset += 2]);
+
+    notify_imu_data();  // Send all 34 bytes
+}
 
  void reset_quaternion_reference(void) {
      // Store current quaternions as reference quaternions
