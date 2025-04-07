@@ -38,19 +38,32 @@ static struct bt_conn_cb conn_callbacks = {
     .disconnected    = disconnected,
 };
 
+// declaring prototype before struct call, and defining after for cleanliness
+static void imu_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value);
+
+// Necessary for imu_service_attrs[]
+static bool imu_notifications_enabled = false;
 
 /* Bluetooth GATT Service */
 static struct bt_gatt_attr imu_service_attrs[] = {
-    BT_GATT_PRIMARY_SERVICE(&imu_service_uuid),
-    BT_GATT_CHARACTERISTIC(&imu_char_uuid.uuid,
-                         BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
-                         BT_GATT_PERM_READ,
-                         read_callback, NULL, imu_data_combined),
-    BT_GATT_CHARACTERISTIC(&time_sync_char_uuid.uuid,
-                       BT_GATT_CHRC_WRITE,
-                       BT_GATT_PERM_WRITE,
-                       NULL, time_sync_write_cb, NULL),
-    BT_GATT_CCC(NULL, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+   // Primary IMU Service Declaration
+   BT_GATT_PRIMARY_SERVICE(&imu_service_uuid),
+
+   // IMU Characteristic with READ and NOTIFY
+   BT_GATT_CHARACTERISTIC(&imu_char_uuid.uuid,
+                        BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,  // Notify enabled
+                        BT_GATT_PERM_READ,                        // Read permitted
+                        read_callback, NULL, imu_data_combined),  // Handles read correctly
+
+   // CCC for IMU Notifications
+   BT_GATT_CCC(imu_ccc_cfg_changed,                                // IMU Notify subscription
+               BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+
+   // Time Sync Characteristic with WRITE
+   BT_GATT_CHARACTERISTIC(&time_sync_char_uuid.uuid,
+                          BT_GATT_CHRC_WRITE,                      // Write only
+                          BT_GATT_PERM_WRITE,
+                          NULL, time_sync_write_cb, NULL),          // Time sync write callback
 };
 
 static struct bt_gatt_service imu_service = BT_GATT_SERVICE(imu_service_attrs);
@@ -81,6 +94,17 @@ bool init_bluetooth(void) {
     printk("Advertising started\n");
     return true;
 }
+
+static void imu_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value) {
+    if (value == BT_GATT_CCC_NOTIFY) {
+        imu_notifications_enabled = true;
+        printk("✅ IMU notifications enabled\n");
+    } else {
+        imu_notifications_enabled = false;
+        printk("❌ IMU notifications disabled\n");
+    }
+}
+
 
 /* Callback for when a device connects */
 void connected(struct bt_conn *conn, uint8_t err) {
@@ -118,9 +142,9 @@ void disconnected(struct bt_conn *conn, uint8_t reason) {
 }
 
 ssize_t read_callback(struct bt_conn *conn, const struct bt_gatt_attr *attr,
-                     void *buf, uint16_t len, uint16_t offset) {
+                     void *buf, uint16_t len, uint16_t time_offset_estimate) {
     const char *value = attr->user_data;
-    return bt_gatt_attr_read(conn, attr, buf, len, offset, value, strlen(value));
+    return bt_gatt_attr_read(conn, attr, buf, len, time_offset_estimate, value, strlen(value));
 }
 
 /* Notify IMU Data */
