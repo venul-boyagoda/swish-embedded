@@ -3,6 +3,9 @@
 #include <stdint.h>              // For int64_t, ADDED
 #include <zephyr/sys/byteorder.h>
 
+#define IMU_OUT_INDEX 1
+#define TIME_SYNC_INDEX 3
+
 #define DEVICE_NAME     CONFIG_BT_DEVICE_NAME
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
 
@@ -21,6 +24,8 @@ static struct bt_uuid_128 time_sync_char_uuid = BT_UUID_INIT_128(BT_UUID_TIME_SY
 
 // uint8_t imu_data_combined[108];  // Buffer to hold 3×3 rotation matrix (9 floats * 4 bytes)
 static struct bt_conn *default_conn = NULL;
+
+static void notify_time_sync_t0();
 
 /* Bluetooth Advertisement Data */
 static const struct bt_data ad[] = {
@@ -49,7 +54,7 @@ static struct bt_gatt_attr imu_service_attrs[] = {
    // Primary IMU Service Declaration
    BT_GATT_PRIMARY_SERVICE(&imu_service_uuid),
 
-   // IMU Characteristic with READ and NOTIFY
+   // IMU Characteristic with READ and NOTIFY --- INDEX 1
    BT_GATT_CHARACTERISTIC(&imu_char_uuid.uuid,
                         BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,  // Notify enabled
                         BT_GATT_PERM_READ,                        // Read permitted
@@ -59,11 +64,13 @@ static struct bt_gatt_attr imu_service_attrs[] = {
    BT_GATT_CCC(imu_ccc_cfg_changed,                                // IMU Notify subscription
                BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
 
-   // Time Sync Characteristic with WRITE
+   // Time Sync Characteristic with WRITE --- INDEX 3
    BT_GATT_CHARACTERISTIC(&time_sync_char_uuid.uuid,
                           BT_GATT_CHRC_WRITE,                      // Write only
                           BT_GATT_PERM_WRITE,
                           NULL, time_sync_write_cb, NULL),          // Time sync write callback
+
+    BT_GATT_CCC(NULL, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
 };
 
 static struct bt_gatt_service imu_service = BT_GATT_SERVICE(imu_service_attrs);
@@ -111,6 +118,8 @@ void connected(struct bt_conn *conn, uint8_t err) {
     if (err) {
         printk("Connection failed, err 0x%02x\n", err);
         return;
+
+        notify_time_sync_t0(); // get the time offset value
     }
     
     printk("Connected\n");
@@ -150,7 +159,7 @@ ssize_t read_callback(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 /* Notify IMU Data */
 extern void notify_imu_data(void) {
     if (default_conn) {
-        bt_gatt_notify(default_conn, &imu_service_attrs[1], imu_data_combined, sizeof(imu_data_combined));
+        bt_gatt_notify(default_conn, &imu_service_attrs[IMU_OUT_INDEX], imu_data_combined, sizeof(imu_data_combined));
     }
 }
 
@@ -203,4 +212,15 @@ static ssize_t time_sync_write_cb(struct bt_conn *conn,
     // time_offset_ms = offset;
 
     return len;
+}
+
+static void notify_time_sync_t0(void) {
+    if (!default_conn) return;
+
+
+    uint64_t t0 = k_uptime_get();
+
+    printk("📤 Sending time sync t₀: %llu ms\n", t0);
+
+    bt_gatt_notify(default_conn, &imu_service_attrs[TIME_SYNC_INDEX], &t0, sizeof(t0));
 }
