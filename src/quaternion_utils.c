@@ -147,13 +147,33 @@
         bno_accel_scaled[i] = (int16_t)(bno_accel[i] * scale);
     }
 
-    // Pack into imu_data_combined (little-endian)
-    int offset = 0;
-    for (int i = 0; i < 4; i++) sys_put_le16(bno_q[i],       &imu_data_combined[offset += 0]);
-    for (int i = 0; i < 4; i++) sys_put_le16(bmi_q[i],       &imu_data_combined[offset += 2]);
-    for (int i = 0; i < 3; i++) sys_put_le16(bno_gyro_scaled[i],  &imu_data_combined[offset += 2]);
-    for (int i = 0; i < 3; i++) sys_put_le16(bmi_gyro_scaled[i],  &imu_data_combined[offset += 2]);
-    for (int i = 0; i < 3; i++) sys_put_le16(bno_accel_scaled[i], &imu_data_combined[offset += 2]);
+    // Pack directly into imu_data_combined[34]
+    // Index 0–7: BNO quaternion
+    sys_put_le16(bno_q[0], &imu_data_combined[0]);
+    sys_put_le16(bno_q[1], &imu_data_combined[2]);
+    sys_put_le16(bno_q[2], &imu_data_combined[4]);
+    sys_put_le16(bno_q[3], &imu_data_combined[6]);
+
+    // Index 8–15: BMI quaternion
+    sys_put_le16(bmi_q[0], &imu_data_combined[8]);
+    sys_put_le16(bmi_q[1], &imu_data_combined[10]);
+    sys_put_le16(bmi_q[2], &imu_data_combined[12]);
+    sys_put_le16(bmi_q[3], &imu_data_combined[14]);
+
+    // Index 16–21: BNO gyro
+    sys_put_le16(bno_gyro_scaled[0], &imu_data_combined[16]);
+    sys_put_le16(bno_gyro_scaled[1], &imu_data_combined[18]);
+    sys_put_le16(bno_gyro_scaled[2], &imu_data_combined[20]);
+
+    // Index 22–27: BMI gyro
+    sys_put_le16(bmi_gyro_scaled[0], &imu_data_combined[22]);
+    sys_put_le16(bmi_gyro_scaled[1], &imu_data_combined[24]);
+    sys_put_le16(bmi_gyro_scaled[2], &imu_data_combined[26]);
+
+    // Index 28–33: BNO accel
+    sys_put_le16(bno_accel_scaled[0], &imu_data_combined[28]);
+    sys_put_le16(bno_accel_scaled[1], &imu_data_combined[30]);
+    sys_put_le16(bno_accel_scaled[2], &imu_data_combined[32]);
 
     notify_imu_data();  // Send all 34 bytes
 }
