@@ -92,6 +92,15 @@ bool init_bluetooth(void) {
     bt_conn_cb_register(&conn_callbacks);
     bt_gatt_service_register(&imu_service);
 
+    /* DEBUG STARTS HERE */
+
+    int errorr = bt_gatt_service_register(&imu_service);
+    if (err != 0) {
+        printk("❌ bt_gatt_service_register() failed: %d\n", err);  // -EINVAL, -ENOMEM, etc.
+    }
+
+    /* DEBUG ENDS HERE */
+
     err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
     if (err) {
         printk("Advertising failed to start (err %d)\n", err);
@@ -119,11 +128,14 @@ void connected(struct bt_conn *conn, uint8_t err) {
         printk("Connection failed, err 0x%02x\n", err);
         return;
 
+    }else{
+        printk("Connected\n");
+
+        default_conn = bt_conn_ref(conn);
+
         notify_time_sync_t0(); // get the time offset value
     }
-    
-    printk("Connected\n");
-    
+
     // // Request 2M PHY after connection
     // struct bt_conn_le_phy_param phy_pref = {
     //     .options = 0, // no coded PHY options needed
@@ -136,9 +148,7 @@ void connected(struct bt_conn *conn, uint8_t err) {
     //     printk("PHY update failed: %d\n", ret);
     // } else {
     //     printk("Requested 2M PHY\n");
-    // }
-    
-    default_conn = bt_conn_ref(conn);
+    // }   
 }
 
 /* Callback for when a device disconnects */
